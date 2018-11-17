@@ -222,7 +222,7 @@
             {
                 path = AzureStorageHelper.Instance.GetPathWithSasTokenQuery(path);
             }
-            
+
             return htmlEncode ? new HtmlString(HttpUtility.HtmlEncode(path)) : new HtmlString(path);
 
         }
@@ -278,7 +278,14 @@
                         {
                             try
                             {
-                                using (var response = (HttpWebResponse)request.GetResponse()) { }
+                                using (var response = (HttpWebResponse)request.GetResponse())
+                                {
+                                    var responseCode = response.StatusCode;
+                                    if (responseCode.Equals(HttpStatusCode.OK))
+                                    {
+                                        responseUrl = response.ResponseUri.AbsoluteUri;
+                                    }
+                                }
                             }
                             catch (System.Net.WebException ex)
                             {
@@ -287,29 +294,36 @@
                                 {
                                     var sasUrl = AzureStorageHelper.Instance.GetPathWithSasTokenQuery(responseUrl);
                                     request = (HttpWebRequest)WebRequest.Create(sasUrl);
+                                    request.Method = "HEAD";
                                 }
                             }
                         }
-                        using (var response = (HttpWebResponse)request.GetResponse())
+                        if (string.IsNullOrEmpty(responseUrl))
                         {
-                            var responseCode = response.StatusCode;
-                            if (responseCode.Equals(HttpStatusCode.OK))
+                            using (var response = (HttpWebResponse)request.GetResponse())
                             {
-                                var absoluteUri = response.ResponseUri.AbsoluteUri;
-                                newCachedImage.CacheUrl = responseUrl != null ? responseUrl : absoluteUri;
-
-                                // this is to mark URLs returned direct to Blob by ImageProcessor as not fully resolved
-                                newCachedImage.Resolved = absoluteUri.InvariantContains(AzureCdnToolkit.Instance.CdnUrl);
-
-                                Cache.InsertCacheItem<CachedImage>(cacheKey, () => newCachedImage);
-                                fullUrlPath = absoluteUri;
+                                var responseCode = response.StatusCode;
+                                if (responseCode.Equals(HttpStatusCode.OK))
+                                {
+                                    responseUrl = response.ResponseUri.AbsoluteUri;                                   
+                                }
                             }
+                        }
+                        if (!string.IsNullOrEmpty(responseUrl))
+                        {
+                            newCachedImage.CacheUrl = responseUrl;
+
+                            // this is to mark URLs returned direct to Blob by ImageProcessor as not fully resolved
+                            newCachedImage.Resolved = responseUrl.InvariantContains(AzureCdnToolkit.Instance.CdnUrl);
+
+                            Cache.InsertCacheItem<CachedImage>(cacheKey, () => newCachedImage);
+                            fullUrlPath = responseUrl;
                         }
                     });
 
                 }
                 else
-                { 
+                {
                     if (AzureCdnToolkit.Instance.usePrivateMedia)
                     {
                         fullUrlPath = AzureStorageHelper.Instance.GetPathWithSasTokenQuery(cachedItem.CacheUrl);
