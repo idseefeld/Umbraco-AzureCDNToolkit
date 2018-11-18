@@ -272,10 +272,13 @@
                     TryFiveTimes(() =>
                     {
                         string responseUrl = null;
-                        var request = (HttpWebRequest)WebRequest.Create(absoluteCropPath);
-                        request.Method = "HEAD";
+                        HttpWebRequest request = null;
                         if (AzureCdnToolkit.Instance.usePrivateMedia)
                         {
+                            var newQueryParam = absoluteCropPath.Contains('?') ? "&" : "?";
+                            newQueryParam += "redirect=true";
+                            request = (HttpWebRequest)WebRequest.Create(absoluteCropPath + newQueryParam);
+                            request.Method = "HEAD";
                             try
                             {
                                 using (var response = (HttpWebResponse)request.GetResponse()) { }
@@ -287,8 +290,14 @@
                                 {
                                     var sasUrl = AzureStorageHelper.Instance.GetPathWithSasTokenQuery(responseUrl);
                                     request = (HttpWebRequest)WebRequest.Create(sasUrl);
+                                    request.Method = "HEAD";
                                 }
                             }
+                        }
+                        else
+                        {
+                            request = (HttpWebRequest)WebRequest.Create(absoluteCropPath);
+                            request.Method = "HEAD";
                         }
                         using (var response = (HttpWebResponse)request.GetResponse())
                         {
@@ -306,7 +315,6 @@
                             }
                         }
                     });
-
                 }
                 else
                 { 
